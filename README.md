@@ -1,4 +1,4 @@
-# 3D ShapeAnalysis Algorithms Repository
+# 3D Shape Analysis Algorithms Repository
 
 A modular **C++ framework for 3D shape analysis and correspondence** based on the Functional Maps framework.
 
