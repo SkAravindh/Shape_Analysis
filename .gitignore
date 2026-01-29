@@ -28,10 +28,14 @@ Makefile
 .DS_Store
 Thumbs.db
 
-# Ignore all dependencies
+# Ignore everything inside Dependencies
 Dependencies/*
 
-# But keep csv_reader
-!Dependencies/csv_Reader/
-!Dependencies/csv_Reader/**
+# Re-allow the folder itself
+!Dependencies/
+
+# Re-allow csv_reader and its contents
+!Dependencies/csv_reader/
+!Dependencies/csv_reader/**
+
 
