@@ -89,6 +89,22 @@ namespace ShapeAnalysis
     };
 
     /**
+     *  Parameters controlling functional map optimization
+     */
+    struct OptimizationParameters
+    {
+        double wDescr;
+        double wLap;
+        double wDescrComm;
+        double wOrient;
+        Eigen::MatrixXd descr1Reduced;
+        Eigen::MatrixXd descr2Reduced;
+        std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> descrOperatorPairs;
+        Eigen::MatrixXd eigenvalueSqDiff;
+        std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> orienOperatorPairs;
+    };
+
+    /**
      * @brief Dynamic point cloud structure compatible with nanoflann.
      * Stores points in a flat array of size (num_points × dimension) and provides the required interface for KD-tree nearest neighbor queries.
      * @tparam T Scalar type (e.g., double)

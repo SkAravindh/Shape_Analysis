@@ -279,52 +279,213 @@ Eigen::MatrixXd MeshProcessor::project(const Eigen::MatrixXd& descr, const int K
     return reduced_descr;
 }
 
-void MeshProcessor::computeGradient(const Eigen::MatrixXd& function, const bool useSymmetry)
+std::vector<Eigen::MatrixXd> MeshProcessor::computeGradient(const Eigen::MatrixXd& function, const bool normalize, const bool useSymmetry)
 {
-    std::cerr << "Gradient computation implementation is not complete, returning" << std::endl;
-    return;
     if(faceArea.size() == 0)
         computeFaceArea();
 
     if(faceNormals.size() == 0)
         computeFaceNormal();
-   // std::vector<Eigen::MatrixXd(function.cols(),3)> gradient;
-    if(!useSymmetry)
+
+    std::vector<Eigen::MatrixXd> gradients;
+    gradients.reserve(mesh->nFaces());
+    for(const surface::Face& F : mesh->faces())
     {
-        for(const surface::Face F : mesh->faces())
+        Vector3 vertices_pos[3];
+        surface::Vertex vertex_index[3];
+        unsigned count_pos = 0;
+        unsigned count_vxt = 0;
+        for(const surface::Vertex& V : F.adjacentVertices())
         {
-            Vector3 vertices_pos[3];
-            surface::Vertex vertex_index[3];
-            unsigned count_pos = 0;
-            unsigned count_vxt = 0;
-            for(const surface::Vertex V : F.adjacentVertices())
+            vertices_pos[count_pos++] = geometry->vertexPositions[V];
+            vertex_index[count_vxt++] = V;
+        }
+
+        if(!useSymmetry)
+        {
+            const Vector3 grad2 = cross(faceNormals[F],  vertices_pos[0] - vertices_pos[2]) / (2.0 * faceArea[F]);
+            const Vector3 grad3 = cross(faceNormals[F], vertices_pos[1] - vertices_pos[0]) / (2.0 * faceArea[F]);
+            // if(function.cols() == 1)
+            // {
+            //     const Eigen::VectorXd fun = function.col(0);
+            //     const double f1 = fun( vertex_index[0].getIndex());
+            //     const double f2 = fun( vertex_index[1].getIndex());
+            //     const double f3 = fun( vertex_index[2].getIndex());
+            //     Vector3 gradient =  (f2 - f1) * grad2 + (f3 - f1) * grad3;
+            // }
             {
-                vertices_pos[count_pos++] = geometry->vertexPositions[V];
-                vertex_index[count_vxt++] = V;
+                //function ----> (N x num_time_step)  N , num of vertices
+                const Eigen::RowVectorXd f1 = function.row(vertex_index[0].getIndex());
+                const Eigen::RowVectorXd f2 = function.row(vertex_index[1].getIndex());
+                const Eigen::RowVectorXd f3 = function.row(vertex_index[2].getIndex());
+                const Eigen::RowVectorXd df2 = f2 - f1; // (1x num_time_step)
+                const Eigen::RowVectorXd df3 = f3 - f1; // (1x num_time_step)
+                const Eigen::RowVector3d g2(grad2.x, grad2.y, grad2.z); // (1 x3)
+                const Eigen::RowVector3d g3(grad3.x, grad3.y, grad3.z); // (1 x3)
+                Eigen::MatrixXd grad(function.cols(), 3);
+                grad.noalias() = (df2.transpose() * g2) + (df3.transpose() * g3);  // (num_time_step x 1) @ (1 x 3) + (num_time_step x 1) @ (1 x 3)  ---> (num_time_step x 3)
+                gradients.push_back(grad);
             }
-            Vector3 grad2 = cross(faceNormals[F],  vertices_pos[0] - vertices_pos[2]) / (2.0 * faceArea[F]);
-            Vector3 grad3 = cross(faceNormals[F], vertices_pos[1] - vertices_pos[0]) / (2.0 * faceArea[F]);
-            if(function.cols() == 1)
+        }
+        else
+        {
+            const Vector3 grad1 = cross(faceNormals[F], vertices_pos[2] - vertices_pos[1]) / (2.0 * faceArea[F]);
+            const Vector3 grad2 = cross(faceNormals[F], vertices_pos[0] - vertices_pos[2]) / (2.0 * faceArea[F]);
+            const Vector3 grad3 = cross(faceNormals[F], vertices_pos[1] - vertices_pos[0]) / (2.0 * faceArea[F]);
             {
-                Eigen::VectorXd fun = function.col(0);
-                const double f1 = fun( vertex_index[0].getIndex());
-                const double f2 = fun( vertex_index[1].getIndex());
-                const double f3 = fun( vertex_index[2].getIndex());
-                Vector3 gradient =  (f2 - f1) * grad2 + (f3 - f1) * grad3;
-            }
-            else
-            {
-                Eigen::VectorXd f1 = function.row(vertex_index[0].getIndex());
-                Eigen::VectorXd f2 = function.row(vertex_index[1].getIndex());
-                Eigen::VectorXd f3 = function.row(vertex_index[2].getIndex());
-                const int p = f1.rows(); // number of functions
-                for(int i=0; i<p; i++)
-                {
-                   Vector3 gradient =  (f2(i) - f1(i)) * grad2 + (f3(i) - f1(i)) * grad3;
-                }
+                const Eigen::RowVector3d g1(grad1.x, grad1.y, grad1.z); // (1 x3)
+                const Eigen::RowVector3d g2(grad2.x, grad2.y, grad2.z); // (1 x3)
+                const Eigen::RowVector3d g3(grad3.x, grad3.y, grad3.z); // (1 x3)
+
+                const Eigen::RowVectorXd f1 = function.row(vertex_index[0].getIndex());
+                const Eigen::RowVectorXd f2 = function.row(vertex_index[1].getIndex());
+                const Eigen::RowVectorXd f3 = function.row(vertex_index[2].getIndex());
+                Eigen::MatrixXd grad(function.cols(), 3);
+                grad.noalias() = (f1.transpose() * g1) + (f2.transpose() * g2) + (f3.transpose() * g3);
+                gradients.push_back(grad);
             }
         }
     }
+    if(normalize)
+    {
+        for(Eigen::MatrixXd& G: gradients)
+        {
+            Eigen::VectorXd norms = G.rowwise().norm();
+            norms = norms.array().max(1e-12); // avoid division by zero
+            G.array().colwise() /= norms.array();
+        }
+    }
+    return gradients;
+}
+
+Eigen::SparseMatrix<double> MeshProcessor::computeOrientationOperator(const std::vector<Eigen::MatrixXd>& gradF, const bool rotated)
+{
+    if(faceArea.size() == 0)
+        computeFaceArea();
+
+    if(faceNormals.size() == 0)
+        computeFaceNormal();
+
+    constexpr double inv3 = 1.0 / 3.0;
+    constexpr double inv2 = 1.0 / 2.0;
+    assert(gradF.size() == mesh->nFaces() && "The size must match");
+
+    // We'll build a sparse matrix W where W*g computes ⟨ n × grad(f), grad(g) ⟩ or ⟨ n x grad(f), grad(g) ⟩ = n . ⟨grad(f) x grad(g)⟩
+    std::vector<Eigen::Triplet<double>> T;
+    T.reserve(12 * mesh->nFaces());
+    for(const surface::Face& F : mesh->faces())
+    {
+        const int face_index = F.getIndex();
+
+        //Gradient field is already rotated
+        const Eigen::MatrixXd& g = gradF[face_index];
+        assert(g.rows() == 1 && g.cols() == 3 && "Each face should have only one gradient");
+        Vector3 grad { g(0,0), g(0,1), g(0,2) };
+
+        // compute the rotated gradient: R = n x grad(f)
+        // This is grad(f) rotated 90 degree counterclockwise in the tangent plane.
+        Vector3 R = rotated ? grad : cross(faceNormals[F], grad);
+
+        Vector3 vertices_pos[3];
+        surface::Vertex vertices_index[3];
+        unsigned count_pos = 0;
+        unsigned count_vxt = 0;
+        for(const surface::Vertex& V : F.adjacentVertices())
+        {
+            vertices_pos[count_pos++] = geometry->vertexPositions[V];
+            vertices_index[count_vxt++] = V;
+        }
+
+        /*
+            * compute gradient of barycentric basis funcitons
+            * for triangle with vertices (v0, v1, v2), the gradients are:
+            * ∇φ0 = (n x (v2 - v1)) / 2A but we omit /(2A) as it cancels]
+            * ∇φ1 = (n x (v0 - v2)) / 2A
+            * ∇φ2 = (n x (v1 - v0)) / 2A
+            * Note: Area factor omitted since it appears in both numerator/denominator
+        */
+        Vector3 grad_phi0 = cross(faceNormals[F], vertices_pos[2] - vertices_pos[1]) * inv2;
+        Vector3 grad_phi1 = cross(faceNormals[F], vertices_pos[0] - vertices_pos[2]) * inv2;
+        Vector3 grad_phi2 = cross(faceNormals[F], vertices_pos[1] - vertices_pos[0]) * inv2;
+
+        /*
+            * compute face-local stiffness matrix entries
+            * s_ij = (1/3) *  ⟨n x grad(f), ∇φ_i⟩
+            * integrated over triangle Using lumped mass matrix approximation (1/3 of area to each vertex)
+        */
+
+        /*
+            * Edge v0-v1 contributions:
+            * S(v0,v1) = (1/3) ⟨ R, ∇φ1 ⟩  [φ1 is basis for v1]
+            * S(v1,v0) = (1/3) ⟨ R, ∇φ0 ⟩  [φ0 is basis for v0]
+        */
+        const double s01 = dot(grad_phi1, R) * inv3;  // previously rotated_gradient[face_index] instead of R
+        const double s10 = dot(grad_phi0, R) * inv3;  // previously rotated_gradient[face_index] instead of R
+
+        /*
+            * Edge v1-v2 contributions:
+            * S(v1,v2) = (1/3) ⟨ R, ∇φ2 ⟩  [φ2 is basis for v2]
+            * S(v2,v1) = (1/3) ⟨ R, ∇φ1 ⟩  [φ1 is basis for v1]
+        */
+        const double s12 = dot(grad_phi2, R) * inv3; // previously rotated_gradient[face_index] instead of R
+        const double s21 = dot(grad_phi1, R) * inv3; // previously rotated_gradient[face_index] instead of R
+
+        /*
+            * Edge v2-v0 contributions:
+            * S(v2,v0) = (1/3) ⟨ R, ∇φ0 ⟩  [φ0 is basis for v0]
+            * S(v0,v2) = (1/3) ⟨ R, ∇φ2 ⟩  [φ2 is basis for v2]
+        */
+        const double s20 = dot(grad_phi0, R) * inv3; // previously rotated_gradient[face_index] instead of R
+        const double s02 = dot(grad_phi2, R) * inv3; // previously rotated_gradient[face_index] instead of R
+
+        const int v0 = vertices_index[0].getIndex();
+        const int v1 = vertices_index[1].getIndex();
+        const int v2 = vertices_index[2].getIndex();
+
+        /*
+            * Helper to add all 4 entries for an edge (i,j)
+            * Creates antisymmetric stencil:
+            * W(i,j) = s_ij
+            * W(j,i) = s_ji
+            * W(i,i) = -s_ij  (for conservation)
+            * W(j,j) = -s_ji  (for conservation)
+        */
+        auto add_edge = [&](const int i, const int j, const double s_ij, const double s_ji)
+        {
+            T.emplace_back(i, j, s_ij);
+            T.emplace_back(j, i, s_ji);   // symmetric partner
+            T.emplace_back(i, i, -s_ij);
+            T.emplace_back(j, j, -s_ji);
+        };
+        // Add contributions from all three edges of the triangle
+        add_edge(v0, v1, s01, s10); // Edge between v0 and v1
+        add_edge(v1, v2, s12, s21); // Edge between v1 and v2
+        add_edge(v2, v0, s20, s02); // Edge between v2 and v0
+    }
+
+    // Assemble sparse matrix from triplets
+    Eigen::SparseMatrix<double> W(mesh->nVertices(), mesh->nVertices());
+    W.setFromTriplets(T.begin(), T.end());
+
+    // Eigen::SparseMatrix<double> invM(mesh->nVertices(), mesh->nVertices());
+    // invM.reserve(M.rows()); // reserve for diagonal entries only.
+    // for(int i=0; i<M.rows(); i++)
+    // {
+    //     invM.insert(i, i) = 1.0 /M.coeff(i, i);
+    // }
+    // invM.makeCompressed();
+    // Eigen::SparseMatrix<double> O = invM * W;
+    // O.makeCompressed();
+    // return O;
+    for(int k = 0; k < W.outerSize(); ++k)
+    {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(W, k); it; ++it)
+        {
+            it.valueRef() /= M.coeff(it.row(), it.row());
+        }
+    }
+    W.makeCompressed();
+    return W;
 }
 
 // Eigen vector and value computation using Spectra Library.

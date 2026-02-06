@@ -118,12 +118,32 @@ namespace ShapeAnalysis
 
         /**
          * Computes per-face gradients of scalar or vector-valued functions.
-         * @note This method is currently experimental and not fully implemented.
+         * @note This method computes gradient vector per faces for given number of time steps.
          * @param function Function(s) defined on vertices
          * @param useSymmetry Whether to enforce symmetric gradients
+         * @return Each Eigen::Matrix has size (num_times × 3) per face, where num_times denotes the number of diffusion time steps. The gradient is computed independently for each time step.
          */
-        void computeGradient(const Eigen::MatrixXd& function, bool useSymmetry);
+        std::vector<Eigen::MatrixXd> computeGradient(const Eigen::MatrixXd& function, bool normalize, bool useSymmetry);
 
+        /**
+         * @brief Computes the stiffness matrix W for the orientation operator O(g) = (∇f × ∇g) · n.
+         * Mathematical forms (all equivalent via scalar triple product):
+         *  - O(g) = (∇f × ∇g) · n [Geometric: oriented parallelogram area]
+         *  - O(g) = ∇f · (∇g × n) [Rotated gradient form]
+         *  - O(g) = ⟨ n × ∇f, ∇g ⟩ [Form used in implementation]
+         *  Implementation details:
+         *   - Uses FEM with piecewise linear elements (P1).
+         *   - ∇f is constant per face (input parameter).
+         *   - Computes the stiffness matrix W such that:
+         *      - (W * g)[i] = integral of  φ_i(x) · (∇f × ∇g) · n dA
+         *      - where φ_i is the barycentric basis function at vertex i.
+         * To obtain pointwise vertex values O(g)_i ≈ (∇f × ∇g)·n at vertex i:
+         *  - O_pointwise = inv(M) * W * g
+         * @param gradF Vector of gradient of f per face. Each element should be 1x3 matrix.
+         * @param rotated If false, computes n × ∇f internally. If true, assumes gradF already contains rotated gradients (n × ∇f).
+         * @return Sparse matrix O (n_vertices × n_vertices) such that:  (O * g)[i] ≈ (∇f × ∇g) · n evaluated at vertex i.
+         */
+        Eigen::SparseMatrix<double> computeOrientationOperator(const std::vector<Eigen::MatrixXd>& gradF, bool rotated);
     private:
         /**
          * Constructs a MeshProcessor by loading a surface mesh from disk.

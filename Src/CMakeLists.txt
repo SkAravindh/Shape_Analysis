@@ -4,6 +4,7 @@ set(Header FunctionalMapping.h
         Descriptors.h
         Utils.h
         FMoptimizer.h
+        FunctionalMapEnergyEvaluator.h
 )
 
 set(Source FunctionalMapping.cpp
@@ -11,6 +12,7 @@ set(Source FunctionalMapping.cpp
         Descriptors.cpp
         Utils.cpp
         FMoptimizer.cpp
+        FunctionalMapEnergyEvaluator.cpp
 )
 
 

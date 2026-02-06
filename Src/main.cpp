@@ -59,7 +59,7 @@ int main(int argc, char** argv)
     fitParams.w_descr = 1e0;
     fitParams.w_lap = 1e-2;
     fitParams.w_dcomm = 1e-1;
-    fitParams.w_orient = 0;
+    fitParams.w_orient = 1;
     funMap->fit(fitParams);
 
     /*

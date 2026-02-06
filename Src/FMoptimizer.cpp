@@ -4,16 +4,16 @@
 
 using namespace ShapeAnalysis;
 
-FunctionalMapEnergy::FunctionalMapEnergy(double wDescr, double wLap, double wDescrComm, double wOrient, const Eigen::MatrixXd& descr1Reduced, const Eigen::MatrixXd& descr2Reduced,
-            const std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>>& descrOperatorPairs, const Eigen::MatrixXd& eigenvalueSqDiff)
-    : wDescr_(wDescr),
-    wLap_(wLap),
-    wDescrComm_(wDescrComm),
-    wOrient_(wOrient),
-    descr1_(descr1Reduced),
-    descr2_(descr2Reduced),
-    descrOperatorPairs_(descrOperatorPairs),
-    eigenvalueSqDiff_(eigenvalueSqDiff)
+FunctionalMapEnergy::FunctionalMapEnergy(const OptimizationParameters& params)
+    : wDescr_(params.wDescr),
+    wLap_(params.wLap),
+    wDescrComm_(params.wDescrComm),
+    wOrient_(params.wOrient),
+    descr1_(params.descr1Reduced),
+    descr2_(params.descr2Reduced),
+    descrOperatorPairs_(params.descrOperatorPairs),
+    orientationOperatorPairs_(params.orienOperatorPairs),
+    eigenvalueSqDiff_(params.eigenvalueSqDiff)
 {
     assert(descr1_.rows() == descr2_.rows() && "Number of rows should match");
     K = static_cast<int>(descr1_.rows());
@@ -22,10 +22,9 @@ FunctionalMapEnergy::FunctionalMapEnergy(double wDescr, double wLap, double wDes
 FunctionalMapEnergy::~FunctionalMapEnergy()
 {}
 
-FunctionalMapEnergySptr FunctionalMapEnergy::create(double wDescr, double wLap, double wDescrComm, double wOrient, const Eigen::MatrixXd& descr1Reduced, const Eigen::MatrixXd& descr2Reduced,
-            const std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>>& descrOperatorPairs, const Eigen::MatrixXd& eigenvalueSqDiff)
+FunctionalMapEnergySptr FunctionalMapEnergy::create(const OptimizationParameters& params)
 {
-    std::shared_ptr<FunctionalMapEnergy> obj =  std::shared_ptr<FunctionalMapEnergy>(new FunctionalMapEnergy(wDescr, wLap, wDescrComm, wOrient, descr1Reduced, descr2Reduced, descrOperatorPairs, eigenvalueSqDiff));
+    std::shared_ptr<FunctionalMapEnergy> obj =  std::shared_ptr<FunctionalMapEnergy>(new FunctionalMapEnergy(params));
     return obj;
 }
 
@@ -64,13 +63,30 @@ double FunctionalMapEnergy::operator()(const Eigen::VectorXd& x, Eigen::VectorXd
     //  Compute the operator commutativity constraint. Can be used with descriptor multiplication operator
     // 0.5 * || C A - B C ||_F^2
     //******************************************************************************************************************
-    for(const auto& ele : descrOperatorPairs_)
     {
-        const Eigen::MatrixXd& op1 = ele.first;
-        const Eigen::MatrixXd& op2 = ele.second;
-        Eigen::MatrixXd Residual = C * op1 - op2 * C;
-        energy += wDescrComm_ * 0.5 * Residual.array().square().sum();
-        gradC.noalias() += wDescrComm_ * (Residual * op1.transpose() - op2.transpose() * Residual);
+        for(const auto& ele : descrOperatorPairs_)
+        {
+            const Eigen::MatrixXd& op1 = ele.first;
+            const Eigen::MatrixXd& op2 = ele.second;
+            Eigen::MatrixXd Residual = C * op1 - op2 * C;
+            energy += wDescrComm_ * 0.5 * Residual.array().square().sum();
+            gradC.noalias() += wDescrComm_ * (Residual * op1.transpose() - op2.transpose() * Residual);
+        }
+    }
+    //******************************************************************************************************************
+    //  Compute the operator commutativity constraint. Can be used with orientation multiplication operator
+    // 0.5 * || C A - B C ||_F^2
+    //******************************************************************************************************************
+    {
+        for(const auto& ele : orientationOperatorPairs_)
+        {
+            const Eigen::MatrixXd& op1 = ele.first;
+            const Eigen::MatrixXd& op2 = ele.second;
+            Eigen::MatrixXd Residual(C.rows(), op1.cols());
+            Residual.noalias() = C * op1 - op2 * C;
+            energy += wOrient_ * 0.5 * Residual.array().square().sum();
+            gradC.noalias() += wOrient_ * (Residual * op1.transpose() - op2.transpose() * Residual);
+        }
     }
 
     // write graadient back to vector

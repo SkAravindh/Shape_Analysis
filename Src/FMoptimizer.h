@@ -10,6 +10,7 @@
 #include <Eigen/Core>
 #include <LBFGSB.h>
 #include "ptr.h"
+#include "Utils.h"
 
 namespace  ShapeAnalysis
 {
@@ -39,12 +40,12 @@ namespace  ShapeAnalysis
          * @param wOrient  Weight reserved for orientation-based constraints (currently unused)
          * @param descr1Reduced Reduced descriptor matrix for shape 1 expressed in its Laplace–Beltrami eigenbasis (K × M).
          * @param descr2Reduced Reduced descriptor matrix for shape 2 expressed in its Laplace–Beltrami eigenbasis (K × M).
-         * @param descrOperatorPairs Pairs of descriptor-induced multiplication operators  (Aᵢ, Bᵢ) in the spectral domain.
+         * @param descrOperatorPairs Pairs of descriptor induced multiplication operators  (Aᵢ, Bᵢ) in the spectral domain.
+         * @param orientationOperatorPairs Pairs of orientation operator operators  (Aᵢ, Bᵢ) in the spectral domain.
          * @param eigenvalueSqDiff Precomputed squared eigenvalue differences ( (λ₁ᵢ − λ₂ⱼ)² ), used for efficient Laplacian commutativity evaluation.
          * @return Shared pointer to the constructed FunctionalMapEnergy instance.
          */
-        static FunctionalMapEnergySptr create(double wDescr, double wLap, double wDescrComm, double wOrient, const Eigen::MatrixXd& descr1Reduced, const Eigen::MatrixXd& descr2Reduced,
-                                              const std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>>& descrOperatorPairs, const Eigen::MatrixXd& eigenvalueSqDiff);
+        static FunctionalMapEnergySptr create(const OptimizationParameters& params);
 
         /**
          * class destructor
@@ -80,8 +81,7 @@ namespace  ShapeAnalysis
         /**
          * class constructor
          */
-        FunctionalMapEnergy(double wDescr, double wLap, double wDescrComm, double wOrient, const Eigen::MatrixXd& descr1Reduced, const Eigen::MatrixXd& descr2Reduced,
-                            const std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>>& descrOperatorPairs, const Eigen::MatrixXd& eigenvalueSqDiff);
+        FunctionalMapEnergy(const OptimizationParameters& params);
     private:
         double wDescr_;
         double wLap_;
@@ -91,7 +91,9 @@ namespace  ShapeAnalysis
         Eigen::MatrixXd descr1_;
         Eigen::MatrixXd descr2_;
         std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> descrOperatorPairs_;
+        std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> orientationOperatorPairs_;
         Eigen::MatrixXd eigenvalueSqDiff_;
+
 
     private:
         // Truncated basis dimension.

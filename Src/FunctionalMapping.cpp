@@ -2,6 +2,7 @@
 #include <optional>
 #include "MeshProcessor.h"
 #include "Descriptors.h"
+#include "FunctionalMapEnergyEvaluator.h"
 #include "FMoptimizer.h"
 
 using namespace ShapeAnalysis;
@@ -182,7 +183,6 @@ void FunctionalMapping::preprocess(const PreProcessParameters& params)
 //  - Optional orientation preservation
 void FunctionalMapping::fit(const FitParameters& params)
 {
-
     // Projection Φᵀ·(M·f): Computes Fourier coefficients of descriptor f in the eigenbasis
     std::cout << std::endl;
     std::cout << "\033[032m" << "Projection Φᵀ·(M·f): Computes the Fourier coefficients of the descriptor f on the source and target meshes in their respective eigenbases." << "\033[0m" << std::endl;
@@ -195,15 +195,16 @@ void FunctionalMapping::fit(const FitParameters& params)
 
     std::cout << "\033[32m" << "Done !!" << "\033[0m" << std::endl;
     //Compute multiplicative operators associated to each descriptor
-    std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> list_descr;
+    std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> descriptorOperatorPairs;
     if(params.w_dcomm > 0.0)
     {
-        list_descr = computeDescrOperator();
+        descriptorOperatorPairs = computeDescrOperator();
     }
 
+    std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> orientationOperatorPairs;
     if(params.w_orient > 0.0)
     {
-        computeOrientationOperator(false, false);
+        orientationOperatorPairs = computeOrientationOperator(false, false);
     }
 
     // perform pairwise squared difference matrix between the eigenvalues of two meshes.
@@ -215,7 +216,35 @@ void FunctionalMapping::fit(const FitParameters& params)
     ev_sqdiff.array() /= total_sum;
 
     // Optimize
-    const FunctionalMapEnergySptr optimizer = FunctionalMapEnergy::create(params.w_descr, params.w_lap, params.w_dcomm, params.w_orient, descr1_reduced, descr2_reduced, list_descr, ev_sqdiff);
+    OptimizationParameters optimParams;
+    optimParams.wDescr = params.w_descr;
+    optimParams.wLap = params.w_lap;
+    optimParams.wDescrComm = params.w_dcomm;
+    optimParams.wOrient = params.w_orient;
+    optimParams.descr1Reduced = descr1_reduced;
+    optimParams.descr2Reduced = descr2_reduced;
+    optimParams.descrOperatorPairs = descriptorOperatorPairs;
+    optimParams.eigenvalueSqDiff = ev_sqdiff;
+    optimParams.orienOperatorPairs = orientationOperatorPairs;
+
+    // rescale orientation term
+    if(params.w_orient)
+    {
+        optimParams.wOrient = 0.0;
+        FunctionalMapEnergyEvaluatorSptr energy_obj = FunctionalMapEnergyEvaluator::create(optimParams);
+        double eval_native = energy_obj->computeEnergy();
+
+        Eigen::MatrixXd C = Eigen::MatrixXd::Identity(K1.first, K2.first);
+        double eval_orient = energy_obj->operatorCommutation(C, orientationOperatorPairs);
+
+        if (eval_orient > 1e-12)
+        {
+            double scale = params.w_orient * (eval_native / eval_orient);
+            optimParams.wOrient = scale;
+        }
+    }
+
+    const FunctionalMapEnergySptr optimizer = FunctionalMapEnergy::create(optimParams);
     optimizer->solve();
     FM = optimizer->getMatrixC();
     std::cout << "\033[032m" << "Optimized Functional Map Matrix : " << "\033[0m" << "(" << optimizer->getMatrixC().rows() << " x "  << optimizer->getMatrixC().cols() << ")" << std::endl;
@@ -226,10 +255,69 @@ std::pair<std::vector<size_t>, std::vector<double>> FunctionalMapping::computePo
     return meshToP2P(FM, sourceMeshSptr, targetMeshSptr, false);
 }
 
-void FunctionalMapping::computeOrientationOperator(bool reversing, bool normalize)
+std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> FunctionalMapping::computeOrientationOperator(bool reversing, bool normalize) const
 {
     std::cout << std::endl;
-    std::cerr << "Yet to implement Orientation Operator, returning " << std::endl;
+    std::cout << "\033[032m" << "Computing orientation operator" << "\033[0m" << std::endl;
+    assert(sourceDescriptor.cols() == targetDescriptor.cols() && "Both should have the same size");
+    const int num_cols = sourceDescriptor.cols();
+    std::vector<std::vector<Eigen::MatrixXd>> grads_source(num_cols);
+    std::vector<std::vector<Eigen::MatrixXd>> grads_target(num_cols);
+
+    std::cout << std::endl;
+    std::cout << "\033[036m" << "Computing gradient per face: descriptor function with " << "\033[0m" << sourceDescriptor.cols() << "\033[036m" << " feature dimensions on source and target meshes." << "\033[0m" << std::endl;
+    for(int i=0; i<num_cols; i++)
+    {
+        grads_source[i] = sourceMeshSptr->computeGradient(sourceDescriptor.col(i), false, false);
+        grads_target[i] = targetMeshSptr->computeGradient(targetDescriptor.col(i), false, false);
+    }
+    const Eigen::MatrixXd reduced_evecs_source = sourceMeshSptr->getTruncatedEvec(K1.first);
+    const Eigen::MatrixXd reduced_evecs_target = targetMeshSptr->getTruncatedEvec(K2.first);
+
+    const Eigen::MatrixXd inverse_source = reduced_evecs_source.transpose() * sourceMeshSptr->getMassMatrix(); // (K x num_vertices)
+    const Eigen::MatrixXd inverse_target = reduced_evecs_target.transpose() * targetMeshSptr->getMassMatrix();
+
+    std::cout << std::endl;
+    std::cout << "\033[036m" << "Computing reduced operators: "  << "\033[0m" << grads_source.size() << " gradient fields" << std::endl;
+    // Compute the operators in reduced basis
+    std::vector<Eigen::MatrixXd> operator1(grads_source.size());
+    for(int i=0; i<grads_source.size(); i++)
+    {
+        // (K x num_vertices) * (num_vertices x num_vertices) * (num_vertices x K) ----> (K x K)
+        // Projecting orientation operator to reduced basis...
+         operator1[i] =  inverse_source * sourceMeshSptr->computeOrientationOperator(grads_source[i], false) * reduced_evecs_source;
+    }
+
+    std::vector<Eigen::MatrixXd> operator2(grads_target.size());
+    if(reversing)
+    {
+        for(int i=0; i<grads_target.size(); i++)
+        {
+            // (K x num_vertices) * (num_vertices x num_vertices) * (num_vertices x K) ----> (K x K)
+            // Projecting orientation operator to reduced basis...
+           operator2[i] = -inverse_target * targetMeshSptr->computeOrientationOperator(grads_target[i], false) * reduced_evecs_target;
+        }
+    }
+    else
+    {
+        for(int i=0; i<grads_target.size(); i++)
+        {
+            // (K x num_vertices) * (num_vertices x num_vertices) * (num_vertices x K) ----> (K x K)
+            // Projecting orientation operator to reduced basis...
+             operator2[i] = inverse_target * targetMeshSptr->computeOrientationOperator(grads_target[i], false) * reduced_evecs_target;
+        }
+    }
+
+    assert(operator1.size() == operator2.size() && "Operator vectors must have same size");
+
+    std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> paired_operators;
+    paired_operators.reserve(operator1.size());
+    for(int i=0; i<operator1.size(); i++)
+    {
+        paired_operators.emplace_back(operator1[i], operator2[i]);
+    }
+    std::cout << "\033[032m" << "Orientation operator: Computation completed." << "\033[0m" << std::endl;
+    return paired_operators;
 }
 
 std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> FunctionalMapping::computeDescrOperator() const

@@ -84,12 +84,14 @@ namespace ShapeAnalysis
         void readLandMarkFile(const std::string& fileName, unsigned expectedCount);
 
         /**
-         * @brief Computes the orientation-preserving operator.
-         * This operator enforces consistency of orientation between the source and target meshes in the functional map optimization.
+         * @brief Computes paired reduced orientation operators for both meshes.
+         * For each of the N descriptor features, computes the reduced orientation operator on source and target meshes, returning them as paired (source, target) matrices.
          * @param reversing Whether to reverse orientation.
          * @param normalize Whether to normalize the operator.
+         * @return Vector of N pairs of k×k matrices, where N = features, k = reduced basis size
+         * @example Example: 120 features with 35 eigenfunctions → returns 120 pairs of 35×35 matrices
          */
-        void computeOrientationOperator(bool reversing, bool normalize);
+         std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> computeOrientationOperator(bool reversing, bool normalize) const;
 
         /**
          * @brief Computes descriptor multiplication operators.

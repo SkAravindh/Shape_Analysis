@@ -7,7 +7,7 @@ namespace ShapeAnalysis
     class FunctionalMapping;
     class Descriptors;
     class FunctionalMapEnergy;
-    class MapRefinement;
+    class FunctionalMapEnergyEvaluator;
 
     typedef std::shared_ptr<MeshProcessor> MeshProcessorSptr;
     typedef std::unique_ptr<MeshProcessor> MeshProcessorUptr;
@@ -21,8 +21,10 @@ namespace ShapeAnalysis
     typedef std::shared_ptr<FunctionalMapEnergy> FunctionalMapEnergySptr;
     typedef std::unique_ptr<FunctionalMapEnergy> FunctionalMapEnergyUptr;
 
-    typedef std::shared_ptr<MapRefinement> MapRefinementSptr;
-    typedef std::unique_ptr<MapRefinement> MapRefinementUptr;
+    typedef std::shared_ptr<FunctionalMapEnergyEvaluator> FunctionalMapEnergyEvaluatorSptr;
+    typedef std::unique_ptr<FunctionalMapEnergyEvaluator> FunctionalMapEnergyEvaluatorUptr;
+
+
 }
 
 #endif //SHAPEANALYSIS_PTR_H
