@@ -273,14 +273,46 @@ Eigen::MatrixXd MeshProcessor::project(const Eigen::MatrixXd& descr, const int K
     }
     else if(K <= eigenVectors.cols())
     {
-        const Eigen::MatrixXd reduced_evecs = eigenVectors.leftCols(K);
+        const Eigen::MatrixXd& reduced_evecs = eigenVectors.leftCols(K);
         reduced_descr = reduced_evecs.transpose() * (M * descr);
     }
     return reduced_descr;
 }
 
+void MeshProcessor::computeBarycentricBasis()
+{
+    if(faceNormals.size() == 0)
+        computeFaceNormal();
+
+    barycentric_basis.resize(3 * mesh->nFaces());
+
+    for(const surface::Face& F: mesh->faces())
+    {
+        Vector3 vertices_positions[3];
+        unsigned count = 0;
+        for(const surface::Vertex& V : F.adjacentVertices())
+        {
+            vertices_positions[count] = geometry->vertexPositions[V];
+            count++;
+        }
+
+        // const Vector3 basis1 = cross(faceNormals[F], vertices_positions[2] - vertices_positions[1]);
+        // const Vector3 basis2 = cross(faceNormals[F], vertices_positions[0] - vertices_positions[2]);
+        // const Vector3 basis3 = cross(faceNormals[F], vertices_positions[1] - vertices_positions[0]);
+        // barycentric_basis.push_back(basis1);
+        // barycentric_basis.push_back(basis2);
+        // barycentric_basis.push_back(basis3);
+        barycentric_basis[(F.getIndex() * 3) + 0] = cross(faceNormals[F], vertices_positions[2] - vertices_positions[1]);
+        barycentric_basis[(F.getIndex() * 3) + 1] = cross(faceNormals[F], vertices_positions[0] - vertices_positions[2]);
+        barycentric_basis[(F.getIndex() * 3) + 2] = cross(faceNormals[F], vertices_positions[1] - vertices_positions[0]);
+    }
+}
+
 std::vector<Eigen::MatrixXd> MeshProcessor::computeGradient(const Eigen::MatrixXd& function, const bool normalize, const bool useSymmetry)
 {
+    if(barycentric_basis.empty())
+        computeBarycentricBasis();
+
     if(faceArea.size() == 0)
         computeFaceArea();
 
@@ -329,9 +361,14 @@ std::vector<Eigen::MatrixXd> MeshProcessor::computeGradient(const Eigen::MatrixX
         }
         else
         {
-            const Vector3 grad1 = cross(faceNormals[F], vertices_pos[2] - vertices_pos[1]) / (2.0 * faceArea[F]);
-            const Vector3 grad2 = cross(faceNormals[F], vertices_pos[0] - vertices_pos[2]) / (2.0 * faceArea[F]);
-            const Vector3 grad3 = cross(faceNormals[F], vertices_pos[1] - vertices_pos[0]) / (2.0 * faceArea[F]);
+            // const Vector3 grad1 = cross(faceNormals[F], vertices_pos[2] - vertices_pos[1]) / (2.0 * faceArea[F]);
+            // const Vector3 grad2 = cross(faceNormals[F], vertices_pos[0] - vertices_pos[2]) / (2.0 * faceArea[F]);
+            // const Vector3 grad3 = cross(faceNormals[F], vertices_pos[1] - vertices_pos[0]) / (2.0 * faceArea[F]);
+            const double invA = 1.0 / (2.0 * faceArea[F]);
+            const Vector3 grad1 = barycentric_basis[(F.getIndex() * 3) + 0] * invA;
+            const Vector3 grad2 = barycentric_basis[(F.getIndex() * 3) + 1] * invA;
+            const Vector3 grad3 = barycentric_basis[(F.getIndex() * 3) + 2] * invA;
+
             {
                 const Eigen::RowVector3d g1(grad1.x, grad1.y, grad1.z); // (1 x3)
                 const Eigen::RowVector3d g2(grad2.x, grad2.y, grad2.z); // (1 x3)
@@ -360,6 +397,9 @@ std::vector<Eigen::MatrixXd> MeshProcessor::computeGradient(const Eigen::MatrixX
 
 Eigen::SparseMatrix<double> MeshProcessor::computeOrientationOperator(const std::vector<Eigen::MatrixXd>& gradF, const bool rotated)
 {
+    if(barycentric_basis.empty())
+        computeBarycentricBasis();
+
     if(faceArea.size() == 0)
         computeFaceArea();
 
@@ -397,17 +437,20 @@ Eigen::SparseMatrix<double> MeshProcessor::computeOrientationOperator(const std:
         }
 
         /*
-            * compute gradient of barycentric basis funcitons
+            * compute gradient of barycentric basis functions
             * for triangle with vertices (v0, v1, v2), the gradients are:
             * ∇φ0 = (n x (v2 - v1)) / 2A but we omit /(2A) as it cancels]
             * ∇φ1 = (n x (v0 - v2)) / 2A
             * ∇φ2 = (n x (v1 - v0)) / 2A
             * Note: Area factor omitted since it appears in both numerator/denominator
         */
-        Vector3 grad_phi0 = cross(faceNormals[F], vertices_pos[2] - vertices_pos[1]) * inv2;
-        Vector3 grad_phi1 = cross(faceNormals[F], vertices_pos[0] - vertices_pos[2]) * inv2;
-        Vector3 grad_phi2 = cross(faceNormals[F], vertices_pos[1] - vertices_pos[0]) * inv2;
+        // Vector3 grad_phi0 = cross(faceNormals[F], vertices_pos[2] - vertices_pos[1]) * inv2;
+        // Vector3 grad_phi1 = cross(faceNormals[F], vertices_pos[0] - vertices_pos[2]) * inv2;
+        // Vector3 grad_phi2 = cross(faceNormals[F], vertices_pos[1] - vertices_pos[0]) * inv2;
 
+        const Vector3 grad_phi0 = barycentric_basis[(F.getIndex() * 3) + 0] * inv2;
+        const Vector3 grad_phi1 = barycentric_basis[(F.getIndex() * 3) + 1] * inv2;
+        const Vector3 grad_phi2 = barycentric_basis[(F.getIndex() * 3) + 2] * inv2;
         /*
             * compute face-local stiffness matrix entries
             * s_ij = (1/3) *  ⟨n x grad(f), ∇φ_i⟩

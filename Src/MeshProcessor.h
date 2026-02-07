@@ -144,6 +144,12 @@ namespace ShapeAnalysis
          * @return Sparse matrix O (n_vertices × n_vertices) such that:  (O * g)[i] ≈ (∇f × ∇g) · n evaluated at vertex i.
          */
         Eigen::SparseMatrix<double> computeOrientationOperator(const std::vector<Eigen::MatrixXd>& gradF, bool rotated);
+
+        /**
+        * Method that precomputes the barycentric basis vectors for each face. These basis vectors are required to compute the per-face gradient vector
+        * and the orientation operator.
+         */
+        void computeBarycentricBasis();
     private:
         /**
          * Constructs a MeshProcessor by loading a surface mesh from disk.
@@ -225,6 +231,10 @@ namespace ShapeAnalysis
 
         // Corresponding Laplacian eigenfunctions φ_i stored column-wise (num_vertices × num_eigenfunctions).
         Eigen::MatrixXd eigenVectors;
+
+        // Container that stores barycentric basis vectors per face.
+        // Three basis vectors are stored for each face, so the size is (3 * number of faces).
+        std::vector<Vector3> barycentric_basis;
     };
 }
 

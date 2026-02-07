@@ -266,6 +266,13 @@ std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> FunctionalMapping::comp
 
     std::cout << std::endl;
     std::cout << "\033[036m" << "Computing gradient per face: descriptor function with " << "\033[0m" << sourceDescriptor.cols() << "\033[036m" << " feature dimensions on source and target meshes." << "\033[0m" << std::endl;
+
+    // This method computes face quantities once for the given mesh and can be used repeatedly.
+    // It must be called before gradient computation and orientation operator computation,
+    // as the populated quantities are used by these two methods.
+    sourceMeshSptr->computeBarycentricBasis();
+    targetMeshSptr->computeBarycentricBasis();
+
     for(int i=0; i<num_cols; i++)
     {
         grads_source[i] = sourceMeshSptr->computeGradient(sourceDescriptor.col(i), false, false);
