@@ -4,6 +4,7 @@
 
 int main(int argc, char** argv)
 {
+
     const std::string fileName1 = "../../data/cat-00.off";
     const std::string fileName2 = "../../data/lion-00.off";
     const std::string landMarkPoints = "../../data/landmarks.txt";
@@ -64,8 +65,14 @@ int main(int argc, char** argv)
 
     /*
      * Recover point-to-point correspondence (Mesh2 → Mesh1).
+     * Simple approach, correspondences are computed using KNN.
      */
-    std::vector<size_t> indices;
-    std::vector<double> distances;
-    std::tie(indices, distances) =  funMap->computePointToPoint();
+     std::vector<size_t> indices;
+     std::vector<double> distances;
+     //std::tie(indices, distances) =  funMap->computePointToPoint();
+
+    /*
+     * Recover point-to-point correspondence (Mesh2 → Mesh1) by refining functional map using ICP.
+     */
+    std::tie(indices, distances) = funMap->iterativeClosestPointRefinement();
 }

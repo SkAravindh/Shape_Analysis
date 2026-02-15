@@ -51,31 +51,66 @@ namespace ShapeAnalysis
         return descriptor;
     }
 
-    std::pair<std::vector<size_t>, std::vector<double>> meshToP2P(const Eigen::MatrixXd& FM_12, const MeshProcessorSptr& mesh1, const MeshProcessorSptr& mesh2, const bool adjointMap)
+    Eigen::MatrixXd pointwiseToFunctionalMap(const std::vector<size_t>& indices, const Eigen::MatrixXd& truncatedSourceEvecs, const Eigen::MatrixXd& truncatedTargetEvecs, const Eigen::SparseMatrix<double>& targetShapeMassMatrix)
     {
-        std::cout << std::endl;
-        std::cout << "\033[032m" << "Establishing point-to-point correspondence using nearest neighbor search in the spectral domain. Note that point-to-point correspondence is "
-                     "established from shape 2 to shape 1." << "\033[0m" << std::endl;
+        Eigen::MatrixXd sourceEvecsUsingIndices(indices.size(), truncatedSourceEvecs.cols());
+        Eigen::MatrixXd updatedFunctionalMap(truncatedTargetEvecs.cols(), truncatedSourceEvecs.cols());
+        // for(int i=0; i<indices.size(); i++)
+        // {
+        //     sourceEvecsUsingIndices.row(i) = sourceEvecs.row(indices[i]);
+        // }
+        sourceEvecsUsingIndices = truncatedSourceEvecs(indices, Eigen::all);
+        if(targetShapeMassMatrix.nonZeros() > 0)
+        {
+            assert(targetShapeMassMatrix.rows() == truncatedTargetEvecs.rows() && "Dimension should match");
+            // (n2 x k2)^T @ ( (n2 x n2) @ (n2 x k1)  ) ---- > (k2 x k1)
+            // C=Φ_target^T @ A2 @ Φ_source^(from p2 to p1)
+            //updatedFunctionalMap.noalias() = targetEvecs.transpose() * (targetShapeArea * sourceEvecsUsingIndices); //(k2 x k1)
+            const Eigen::VectorXd mass_vec = targetShapeMassMatrix.diagonal();
+            const Eigen::MatrixXd weighted = (sourceEvecsUsingIndices.array().colwise() * mass_vec.array());
+            updatedFunctionalMap.noalias() = truncatedTargetEvecs.transpose() * weighted;
+        }
+        else
+        {
+            //QR
+            updatedFunctionalMap.noalias() = truncatedTargetEvecs.colPivHouseholderQr().solve(sourceEvecsUsingIndices);
+        }
+        return updatedFunctionalMap;
+    }
 
+    //meshToP2P
+    std::pair<std::vector<size_t>, std::vector<double>> functionalMapToPointwise(const Eigen::MatrixXd& FM_12, const MeshProcessorSptr& mesh1, const MeshProcessorSptr& mesh2, const bool adjointMap, const bool info)
+    {
+        if(info)
+        {
+            std::cout << std::endl;
+            std::cout << "\033[032m" << "Establishing point-to-point correspondence using nearest neighbor search in the spectral domain. Note that point-to-point correspondence is "
+                         "established from shape 2 to shape 1." << "\033[0m" << std::endl;
+        }
         assert(FM_12.cols() == FM_12.rows() && "Should be square matrix");
+
+        // Needed, if we are working with non-square functional map matrix.
+        // const int k2 = FM_12.rows();
+        // const int k1 = FM_12.cols();
+
         int dim  = FM_12.cols();
         Eigen::MatrixXd embedded1;
         Eigen::MatrixXd embedded2;
         if(adjointMap)
         {
-            embedded1 = mesh1->getTruncatedEvec(dim);
-            embedded2 = (mesh2->getTruncatedEvec(dim) * FM_12);
+            embedded1 = mesh1->getTruncatedEvec(dim); // we should use k1 instead of dim, if FM_12 is not a square matrix.
+            embedded2 = (mesh2->getTruncatedEvec(dim) * FM_12); // likewise, here we should use k2, if FM_12 is not a square matrix.
         }
         else
         {
             // Φ1(i,:) ∈ ℝ¹ˣ³⁵   row vector of coefficients so C^T is required
-            embedded1 = (mesh1->getTruncatedEvec(dim) * FM_12.transpose());
-            embedded2 = mesh2->getTruncatedEvec(dim);
+            embedded1 = (mesh1->getTruncatedEvec(dim) * FM_12.transpose()); // here we should use k1, if FM_12 is not a square matrix.
+            embedded2 = mesh2->getTruncatedEvec(dim); //here we should use k2, if FM_12 is not a square matrix.
         }
-        return NearestNeighborSearch(embedded1, embedded2, 1);
+        return NearestNeighborSearch(embedded1, embedded2, 1, info);
     }
 
-    std::pair<std::vector<size_t>, std::vector<double>> NearestNeighborSearch(const Eigen::MatrixXd& sourceEmdedding, const Eigen::MatrixXd& targetEmbedding, const int k)
+    std::pair<std::vector<size_t>, std::vector<double>> NearestNeighborSearch(const Eigen::MatrixXd& sourceEmdedding, const Eigen::MatrixXd& targetEmbedding, const int k, const bool info)
     {
         assert(sourceEmdedding.cols() == targetEmbedding.cols());
         int dim = static_cast<int>(sourceEmdedding.cols());
@@ -95,7 +130,8 @@ namespace ShapeAnalysis
         std::vector<double> result_distance(num_queries);
         {
             // Query buffers (reused)
-            std::cout << "\033[032m" << "Performing nearest neighbor search using a KD-tree. " << "Number of query points: " << "\033[0m" << num_queries << std::endl;
+            if(info)
+                std::cout << "\033[032m" << "Performing nearest neighbor search using a KD-tree. " << "Number of query points: " << "\033[0m" << num_queries << std::endl;
             std::vector<double> query(dim);
             std::vector<size_t> ret_index(k);
             std::vector<double> out_dis_sqr(k);
@@ -118,7 +154,8 @@ namespace ShapeAnalysis
                 result_distance[i] = (out_dis_sqr[0]);
             }
         }
-        std::cout << "\033[032m" << "Done !!" << "\033[0m" << std::endl;
+        if(info)
+            std::cout << "\033[032m" << "Done !!" << "\033[0m" << std::endl;
         return {result_indices, result_distance};
     }
 
@@ -137,6 +174,42 @@ namespace ShapeAnalysis
             }
         }
         //std::cout << "Total number of elements in the point cloud container :" << cloud.pts.size() << std::endl;
+    }
+
+    void showProgress(int current, int total)
+    {
+        const int width = 50;
+        float progress = static_cast<float>(current) / total;
+
+        // Round to nearest integer for both bar and percent
+        int filled = static_cast<int>(width * progress + 0.5f);
+        int percent = static_cast<int>(progress * 100 + 0.5f);
+
+        // Clamp to valid range (just in case)
+        if (filled > width) filled = width;
+        if (percent > 100) percent = 100;
+
+        std::cout << "\r[";   // carriage return to start of line
+        for (int i = 0; i < width; ++i)
+            std::cout << (i < filled ? '#' : ' ');
+        std::cout << "] " << std::setw(3) << percent << '%' << std::flush;
+    }
+
+    bool isDiagonal(const Eigen::SparseMatrix<double>& mat)
+    {
+        // Iterate over the outer dimension (columns by default)
+        for(int k = 0; k < mat.outerSize(); ++k)
+        {
+            // Iterate over the inner indices in the current column
+            for(Eigen::SparseMatrix<double>::InnerIterator it(mat, k); it; ++it)
+            {
+                if (it.row() != it.col())
+                {
+                    return false; // Found an off‑diagonal entry
+                }
+            }
+        }
+        return true;
     }
 }
 

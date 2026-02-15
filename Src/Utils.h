@@ -7,7 +7,9 @@
 #define UTILS_H
 #include <string>
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 #include <filesystem>
+#include <thread>
 #include "ptr.h"
 
 /**
@@ -171,7 +173,24 @@ namespace ShapeAnalysis
      * @param adjointMap If true, applies the map to the target eigenbasis, otherwise applies the transpose to the source basis.
      * @return pair of (corresponding vertex indices, squared distances).
      */
-    std::pair<std::vector<size_t>, std::vector<double>> meshToP2P(const Eigen::MatrixXd& FM, const MeshProcessorSptr& mesh1, const MeshProcessorSptr& mesh2, bool adjointMap);
+    // meshToP2P
+    std::pair<std::vector<size_t>, std::vector<double>> functionalMapToPointwise(const Eigen::MatrixXd& FM, const MeshProcessorSptr& mesh1, const MeshProcessorSptr& mesh2, bool adjointMap, bool info = false);
+
+    /**
+     * @brief Convert a point-to-point correspondence into a functional map matrix.
+     * Given a vertex-wise correspondence from the target mesh to the source mesh, this function recovers the functional map C that transfers functions expressed
+     * in the source spectral basis to the target spectral basis.
+     *
+     * The functional map is computed by projecting the source eigenfunctions ((reordered according to the correspondence) onto the target eigenbasis:)
+     *          - C = Φ_target^T * MassMatrix_target * Φ_source(P)
+     * If the mass matrix is empty, the map is estimated using a least squares solve via QR decomposition instead.
+     * @param indices Point-to-point correspondence from target ---> source. indices[i] is the index of the source vertex corresponding to target vertex i, size is n_target.
+     * @param truncatedSourceEvecs Truncated eigenvectors of the source mesh (n_source × K1).
+     * @param truncatedTargetEvecs Truncated eigenvectors of the target mesh (n_target × K2).
+     * @param targetShapeMassMatrix Target mesh lumped mass matrix (n_target × n_target), typically containing Voronoi areas or per-vertex masses.
+     * @return  Functional map matrix C of size (K2 × K1) that maps coefficients from the source spectral basis to the target spectral basis.
+     */
+    Eigen::MatrixXd pointwiseToFunctionalMap(const std::vector<size_t>& indices, const Eigen::MatrixXd& truncatedSourceEvecs, const Eigen::MatrixXd& truncatedTargetEvecs, const Eigen::SparseMatrix<double>& targetShapeMassMatrix);
 
     /**
      * @brief Performs nearest neighbor search using a KD-tree.
@@ -179,9 +198,10 @@ namespace ShapeAnalysis
      * @param sourceEmdedding Source point set (num_source × dim).
      * @param targetEmbedding Target point set (num_target × dim).
      * @param k Number of nearest neighbors to query.
+     * @param info Print output message if it is true.
      * @return Pair of (indices of nearest neighbors, squared distances).
      */
-    std::pair<std::vector<size_t>, std::vector<double>> NearestNeighborSearch(const Eigen::MatrixXd& sourceEmdedding, const Eigen::MatrixXd& targetEmbedding, int k=1);
+    std::pair<std::vector<size_t>, std::vector<double>> NearestNeighborSearch(const Eigen::MatrixXd& sourceEmdedding, const Eigen::MatrixXd& targetEmbedding, int k=1, bool info = false);
 
     /**
      * @brief Converts an Eigen matrix into a dynamic point cloud.
@@ -192,5 +212,20 @@ namespace ShapeAnalysis
      */
     template <typename T>
     void createPointCloud(const Eigen::MatrixXd& X, PointCloudDynamic<T>& cloud);
+
+    /**
+     * A method that display progress bar. Mostly used in loops.
+     * @param current Current iteration.
+     * @param total Number of iteration.
+     */
+    void showProgress(int current, int total);
+
+    /**
+     * @brief A method to verify if the given sparse matrix is diagonal or not
+     * @param mat
+     * @return
+     */
+    bool isDiagonal(const Eigen::SparseMatrix<double>& mat);
+    
 }
 #endif

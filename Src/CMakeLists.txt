@@ -5,6 +5,7 @@ set(Header FunctionalMapping.h
         Utils.h
         FMoptimizer.h
         FunctionalMapEnergyEvaluator.h
+        Map_Refinement/ICP.h
 )
 
 set(Source FunctionalMapping.cpp
@@ -13,6 +14,7 @@ set(Source FunctionalMapping.cpp
         Utils.cpp
         FMoptimizer.cpp
         FunctionalMapEnergyEvaluator.cpp
+        Map_Refinement/ICP.cpp
 )
 
 

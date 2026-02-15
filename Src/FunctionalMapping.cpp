@@ -4,6 +4,7 @@
 #include "Descriptors.h"
 #include "FunctionalMapEnergyEvaluator.h"
 #include "FMoptimizer.h"
+#include "Map_Refinement/ICP.h"
 
 using namespace ShapeAnalysis;
 
@@ -21,7 +22,7 @@ FunctionalMappingSptr FunctionalMapping::create(const MeshProcessorSptr& sourceM
 
 void FunctionalMapping::readLandMarkFile(const std::string& fileName, const unsigned expectedCount)
 {
-    std::cout << "\033[032m" << "Reading Land Mark file... " << "\033[0m" << std::endl;
+    std::cout << "\033[032m" << "Reading landmark file... " << "\033[0m" << std::endl;
     std::ifstream file(fileName);
     if(!file.is_open())
     {
@@ -54,7 +55,7 @@ void FunctionalMapping::readLandMarkFile(const std::string& fileName, const unsi
         std::cerr << "Warning: Only read " << count << "points, expected " << expectedCount << std::endl;
         landMarkPoints.conservativeResize(count, 2);
     }
-    std::cout << "\033[032m" << "Reading Land Mark file is finished " << "\033[0m" << std::endl;
+    std::cout << "\033[032m" << "Finished reading landmark file... " << "\033[0m" << std::endl;
 }
 
 // Preprocessing pipeline:
@@ -147,8 +148,8 @@ void FunctionalMapping::preprocess(const PreProcessParameters& params)
         descr1 = hStackDescriptors(descr1, lmDescr1);
         descr2 = hStackDescriptors(descr2, lmDescr2);
 
-        std::cout << "Size after combining descriptor_1 : " << "(" << descr1.rows() << " x " << descr1.cols() << ")" << std::endl;
-        std::cout << "Size after combining descriptor_2 : " << "(" << descr2.rows() << " x " << descr2.cols() << ")" << std::endl;
+        std::cout << "Combined descriptor sizes: descriptor_1 " << "(" << descr1.rows() << " x " << descr1.cols() << ")" << std::endl;
+        std::cout << "Combined descriptor sizes: descriptor_2 " << "(" << descr2.rows() << " x " << descr2.cols() << ")" << std::endl;
     }
 
     // sample both descriptors using given subsample steps.
@@ -156,8 +157,8 @@ void FunctionalMapping::preprocess(const PreProcessParameters& params)
     Eigen::MatrixXd subSampleDescr2 = subSampleDescriptors(descr2, params.subSampleStep);
 
     std::cout << std::endl;
-    std::cout << "Sub sampled descr1 : " << "(" << subSampleDescr1.rows() << " x " << subSampleDescr1.cols() << ")" << std::endl;
-    std::cout << "Sub sampled descr2 : " << "(" << subSampleDescr2.rows() << " x " << subSampleDescr2.cols() << ")" << std::endl;
+    std::cout << "Subsampled descriptor sizes: descriptor_1 : " << "(" << subSampleDescr1.rows() << " x " << subSampleDescr1.cols() << ")" << std::endl;
+    std::cout << "Subsampled descriptor sizes: descriptor_2 : " << "(" << subSampleDescr2.rows() << " x " << subSampleDescr2.cols() << ")" << std::endl;
     std::cout << "\033[32m" << "Feature Subsampling is complete." << "\033[0m" << std::endl;
 
     // Normalize descriptors with respect to the L2 inner product induced
@@ -191,7 +192,7 @@ void FunctionalMapping::fit(const FitParameters& params)
     std::cout << std::endl;
 
     std::cout << "Reduced descriptor_1 : " << "(" <<descr1_reduced.rows() << " x " << descr1_reduced.cols()  << ")" << std::endl;
-    std::cout << "reduced descriptor_2 : " << "(" << descr2_reduced.rows() << " x " << descr2_reduced.cols() << ")" << std::endl;
+    std::cout << "Reduced descriptor_2 : " << "(" << descr2_reduced.rows() << " x " << descr2_reduced.cols() << ")" << std::endl;
 
     std::cout << "\033[32m" << "Done !!" << "\033[0m" << std::endl;
     //Compute multiplicative operators associated to each descriptor
@@ -250,11 +251,6 @@ void FunctionalMapping::fit(const FitParameters& params)
     std::cout << "\033[032m" << "Optimized Functional Map Matrix : " << "\033[0m" << "(" << optimizer->getMatrixC().rows() << " x "  << optimizer->getMatrixC().cols() << ")" << std::endl;
 }
 
-std::pair<std::vector<size_t>, std::vector<double>> FunctionalMapping::computePointToPoint() const
-{
-    return meshToP2P(FM, sourceMeshSptr, targetMeshSptr, false);
-}
-
 std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> FunctionalMapping::computeOrientationOperator(bool reversing, bool normalize) const
 {
     std::cout << std::endl;
@@ -278,11 +274,18 @@ std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> FunctionalMapping::comp
         grads_source[i] = sourceMeshSptr->computeGradient(sourceDescriptor.col(i), false, false);
         grads_target[i] = targetMeshSptr->computeGradient(targetDescriptor.col(i), false, false);
     }
-    const Eigen::MatrixXd reduced_evecs_source = sourceMeshSptr->getTruncatedEvec(K1.first);
-    const Eigen::MatrixXd reduced_evecs_target = targetMeshSptr->getTruncatedEvec(K2.first);
 
-    const Eigen::MatrixXd inverse_source = reduced_evecs_source.transpose() * sourceMeshSptr->getMassMatrix(); // (K x num_vertices)
-    const Eigen::MatrixXd inverse_target = reduced_evecs_target.transpose() * targetMeshSptr->getMassMatrix();
+    const Eigen::MatrixXd truncatedSourceEvecs = sourceMeshSptr->getTruncatedEvec(K1.first);
+    const Eigen::MatrixXd truncatedTargetEvecs = targetMeshSptr->getTruncatedEvec(K2.first);
+
+    //const Eigen::MatrixXd inverse_source = truncatedSourceEvecs.transpose() * sourceMeshSptr->getMassMatrix(); // (K x num_vertices)
+    //const Eigen::MatrixXd inverse_target = truncatedTargetEvecs.transpose() * targetMeshSptr->getMassMatrix();
+
+    // Faster version
+    const Eigen::VectorXd m_src = sourceMeshSptr->getMassMatrix().diagonal();
+    const Eigen::VectorXd m_trg = targetMeshSptr->getMassMatrix().diagonal();
+    const Eigen::MatrixXd inverse_source = truncatedSourceEvecs.transpose().array().rowwise() * m_src.transpose().array(); // (K x num_vertices)
+    const Eigen::MatrixXd inverse_target = truncatedTargetEvecs.transpose().array().rowwise() * m_trg.transpose().array();
 
     std::cout << std::endl;
     std::cout << "\033[036m" << "Computing reduced operators: "  << "\033[0m" << grads_source.size() << " gradient fields" << std::endl;
@@ -292,7 +295,7 @@ std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> FunctionalMapping::comp
     {
         // (K x num_vertices) * (num_vertices x num_vertices) * (num_vertices x K) ----> (K x K)
         // Projecting orientation operator to reduced basis...
-         operator1[i] =  inverse_source * sourceMeshSptr->computeOrientationOperator(grads_source[i], false) * reduced_evecs_source;
+         operator1[i] =  inverse_source * sourceMeshSptr->computeOrientationOperator(grads_source[i], false) * truncatedSourceEvecs;
     }
 
     std::vector<Eigen::MatrixXd> operator2(grads_target.size());
@@ -302,7 +305,7 @@ std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> FunctionalMapping::comp
         {
             // (K x num_vertices) * (num_vertices x num_vertices) * (num_vertices x K) ----> (K x K)
             // Projecting orientation operator to reduced basis...
-           operator2[i] = -inverse_target * targetMeshSptr->computeOrientationOperator(grads_target[i], false) * reduced_evecs_target;
+           operator2[i] = -inverse_target * targetMeshSptr->computeOrientationOperator(grads_target[i], false) * truncatedTargetEvecs;
         }
     }
     else
@@ -311,7 +314,7 @@ std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> FunctionalMapping::comp
         {
             // (K x num_vertices) * (num_vertices x num_vertices) * (num_vertices x K) ----> (K x K)
             // Projecting orientation operator to reduced basis...
-             operator2[i] = inverse_target * targetMeshSptr->computeOrientationOperator(grads_target[i], false) * reduced_evecs_target;
+             operator2[i] = inverse_target * targetMeshSptr->computeOrientationOperator(grads_target[i], false) * truncatedTargetEvecs;
         }
     }
 
@@ -351,8 +354,13 @@ std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> FunctionalMapping::comp
     const Eigen::SparseMatrix<double>& M2 = targetMeshSptr->getMassMatrix(); // (N2, N2)
 
     // Compute pseudo-inverses
-    const Eigen::MatrixXd pinv1 = Phi1.transpose() * M1; // (N, K)^T * (N,N) ---> (K,N)
-    const Eigen::MatrixXd pinv2 = Phi2.transpose() * M2; // // (N, K)^T * (N,N) ---> (K,N)
+    // const Eigen::MatrixXd pinv1 = Phi1.transpose() * M1; // (N, K)^T * (N,N) ---> (K,N)
+    // const Eigen::MatrixXd pinv2 = Phi2.transpose() * M2; // // (N, K)^T * (N,N) ---> (K,N)
+    // faster version
+    const Eigen::VectorXd m_source = M1.diagonal();
+    const Eigen::VectorXd m_target = M2.diagonal();
+    const Eigen::MatrixXd pinv1 = Phi1.transpose().array().rowwise() * m_source.transpose().array(); // (N, K)^T * (N,N) ---> (K,N)
+    const Eigen::MatrixXd pinv2 = Phi2.transpose().array().rowwise() * m_target.transpose().array(); // // (N, K)^T * (N,N) ---> (K,N)
 
     const int num_descr = static_cast<int>(sourceDescriptor.cols());
     std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> list_descr;
@@ -426,4 +434,29 @@ Eigen::MatrixXd FunctionalMapping::project(const Eigen::MatrixXd& descr, const M
             break;
     }
     return reduced_descr;
+}
+
+std::pair<std::vector<size_t>, std::vector<double>> FunctionalMapping::computePointToPoint() const
+{
+    return functionalMapToPointwise(FM, sourceMeshSptr, targetMeshSptr, false, true);
+}
+
+std::pair<std::vector<size_t>, std::vector<double>> FunctionalMapping::iterativeClosestPointRefinement()
+{
+    return iterativeClosestPointRefinement(50, 1e-10, false);
+}
+
+std::pair<std::vector<size_t>, std::vector<double>> FunctionalMapping::iterativeClosestPointRefinement(const int numIter, const double tolerance, const bool adjointMap)
+{
+    std::cout << std::endl;
+    std::cout << "\033[032m" << "Performing Iterative Closest Point (ICP) to refine the functional map, " "enforcing orthogonality (C C^T = I) and establishing accurate point-to-point "
+                 "correspondences from the target to the source shape." << "\033[0m" << std::endl;
+
+    IterativeClosestPointSptr icp = IterativeClosestPoint::create(FM, sourceMeshSptr, targetMeshSptr, numIter, tolerance, adjointMap);
+    FM_ICP =  icp->refineICP();
+    std::vector<size_t> indices;
+    std::vector<double> distances;
+    std::tie(indices, distances) = functionalMapToPointwise(FM_ICP, sourceMeshSptr, targetMeshSptr, false, true);
+    //std::cout << "\033[032m" << "Done !!" << "\033[0m" << std::endl;
+    return {indices, distances};
 }

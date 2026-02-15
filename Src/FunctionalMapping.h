@@ -63,8 +63,15 @@ namespace ShapeAnalysis
         /**
          * @brief Computes a point-to-point correspondence from the functional map.
          * The correspondence is obtained via nearest-neighbor search in the spectral embedding induced by the functional map.
+         * @return Returns, for each vertex in the target mesh, its corresponding vertex in the source shape and the associated spectral domain distance
          */
         std::pair<std::vector<size_t>, std::vector<double>> computePointToPoint() const;
+
+        /**
+         * @brief Helper method that initiates actual ICP method which further performs the functional map refinement procedure.
+         * @return Returns, for each vertex in the target mesh, its corresponding vertex in the source shape and the associated spectral domain distance
+         */
+        std::pair<std::vector<size_t>, std::vector<double>> iterativeClosestPointRefinement();
 
     private:
         /**
@@ -116,6 +123,15 @@ namespace ShapeAnalysis
          */
         Eigen::MatrixXd computeEigenvalueSqDiff() const;
 
+        /**
+         * @brief A method that creates instance of ICP class and initiates the map refinement process.
+         * @param numIter Maximum ICP iterations.
+         * @param tolerance Convergence threshold.
+         * @param adjointMap Use adjoint map flag.
+         * @return Returns, for each vertex in the target mesh, its corresponding vertex in the source shape and the associated spectral domain distance
+         */
+        std::pair<std::vector<size_t>, std::vector<double>> iterativeClosestPointRefinement(int numIter, double tolerance, bool adjointMap);
+
     private:
         // Non-owning shared references to input meshes
         MeshProcessorSptr sourceMeshSptr;
@@ -136,6 +152,9 @@ namespace ShapeAnalysis
 
         // Functional map matrix C
         Eigen::MatrixXd FM;
+
+        // Refined Functional map matrix C using ICP
+        Eigen::MatrixXd FM_ICP;
     };
 
 }

@@ -48,7 +48,7 @@ void MeshProcessor::computeFaceArea()
 void MeshProcessor::laplacianSpectrum(const int no_of_ev, const bool intrinsic, const bool robust)
 {
     std::cout << "\n";
-    std::cout << "\033[32m" << "Computing Discrete Laplacian and Vertex Lumped Mass Matrix for the given mesh : " << "\033[0m" <<  meshName << std::endl;
+    std::cout << "\033[32m" << "Computing Discrete Laplacian and Vertex Lumped Mass Matrix for mesh : " << "\033[0m" <<  meshName << std::endl;
     const bool robustLaplacian = (intrinsic || robust);
     const double relativeMollificationFactor = robust ? 1e-5 : 0.0;
     //std::cout << "relativeMollificationFactor " << relativeMollificationFactor << "\n";
@@ -71,6 +71,9 @@ void MeshProcessor::laplacianSpectrum(const int no_of_ev, const bool intrinsic, 
     L.makeCompressed();
     M.makeCompressed();
 
+    // The lumped mass matrix is diagonal. We explicitly assert this property to guarantee correctness. Many matrix multiplications involving the
+    // mass matrix are implemented using optimized element-wise operations, which assume a diagonal structure.
+    assert(ShapeAnalysis::isDiagonal(M) && "Mass matrix should be diagonal");
     geometry->unrequireCotanLaplacian();
     geometry->unrequireVertexLumpedMassMatrix();
 }
@@ -78,7 +81,7 @@ void MeshProcessor::laplacianSpectrum(const int no_of_ev, const bool intrinsic, 
 void MeshProcessor::readPreComputedEigenSpectrum(const int no_of_ev, const std::string& eigenSpecPath)
 {
     std::cout << std::endl;
-    std::cout << "\033[32m" << "Reading eigen spectra from the file" << "\033[0m" << std::endl;
+    std::cout << "\033[32m" << "Reading eigen spectra from file..." << "\033[0m" << std::endl;
     std::cout << "Note: It is recommended to precompute 200 eigenvalues and eigenvectors per mesh, ";
     std::cout << "so currently, 200 eigen spectra have been computed per mesh." << std::endl;
 
@@ -130,7 +133,7 @@ void MeshProcessor::eigenSpectrum(const int no_of_ev, const std::string& eigenSp
     std::cout << "and it is time-consuming. It will soon be replaced by a more efficient method." << "\033[0m" << std::endl;
 
     auto start = std::chrono::high_resolution_clock::now();
-    std::vector<Vector<double>> eVectors = smallestKEigenvectorsPositiveDefinite(L, M, no_of_ev, 100);
+    std::vector<Vector<double>> eVectors = smallestKEigenvectorsPositiveDefinite(L, M, no_of_ev, 75);
     //std::vector<Vector<double>> eVectors = smallestKEigenvectorsPositiveDefiniteTol(L, M, no_of_ev, 1e-8);
 
     const size_t num_of_vertices = eVectors[0].size();
@@ -269,12 +272,17 @@ Eigen::MatrixXd MeshProcessor::project(const Eigen::MatrixXd& descr, const int K
     Eigen::MatrixXd reduced_descr;
     if(K==-1)
     {
-      reduced_descr = eigenVectors.transpose() * (M * descr);
+        //reduced_descr = eigenVectors.transpose() * (M * descr);
+        Eigen::VectorXd voronoi_area = M.diagonal();
+        reduced_descr = eigenVectors.transpose() * (descr.array().colwise() * voronoi_area.array()).matrix();
     }
     else if(K <= eigenVectors.cols())
     {
         const Eigen::MatrixXd& reduced_evecs = eigenVectors.leftCols(K);
-        reduced_descr = reduced_evecs.transpose() * (M * descr);
+        //reduced_descr = reduced_evecs.transpose() * (M * descr);
+        Eigen::VectorXd voronoi_area = M.diagonal();
+        // (n x k)^T @ (n x n) @ (n x p) ---> (k x p)
+        reduced_descr.noalias() = reduced_evecs.transpose() * (descr.array().colwise() * voronoi_area.array()).matrix();
     }
     return reduced_descr;
 }
