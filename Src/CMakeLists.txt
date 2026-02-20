@@ -6,6 +6,7 @@ set(Header FunctionalMapping.h
         FMoptimizer.h
         FunctionalMapEnergyEvaluator.h
         Map_Refinement/ICP.h
+        Map_Refinement/ZoomOut.h
 )
 
 set(Source FunctionalMapping.cpp
@@ -15,6 +16,7 @@ set(Source FunctionalMapping.cpp
         FMoptimizer.cpp
         FunctionalMapEnergyEvaluator.cpp
         Map_Refinement/ICP.cpp
+        Map_Refinement/ZoomOut.cpp
 )
 
 

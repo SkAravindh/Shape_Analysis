@@ -51,7 +51,7 @@ namespace ShapeAnalysis
         return descriptor;
     }
 
-    Eigen::MatrixXd pointwiseToFunctionalMap(const std::vector<size_t>& indices, const Eigen::MatrixXd& truncatedSourceEvecs, const Eigen::MatrixXd& truncatedTargetEvecs, const Eigen::SparseMatrix<double>& targetShapeMassMatrix)
+    Eigen::MatrixXd pointwiseToFunctionalMap(const std::vector<size_t>& indices, const Eigen::MatrixXd& truncatedSourceEvecs, const Eigen::MatrixXd& truncatedTargetEvecs, const Eigen::SparseMatrix<double>& targetShapeMassMatrix, const SolverType solType)
     {
         Eigen::MatrixXd sourceEvecsUsingIndices(indices.size(), truncatedSourceEvecs.cols());
         Eigen::MatrixXd updatedFunctionalMap(truncatedTargetEvecs.cols(), truncatedSourceEvecs.cols());
@@ -60,11 +60,15 @@ namespace ShapeAnalysis
         //     sourceEvecsUsingIndices.row(i) = sourceEvecs.row(indices[i]);
         // }
         sourceEvecsUsingIndices = truncatedSourceEvecs(indices, Eigen::all);
-        if(targetShapeMassMatrix.nonZeros() > 0)
+
+        bool isWeightedLeastSquares = solType == SolverType::WeightedLeastSquaresSolver;
+
+        if(isWeightedLeastSquares)
         {
             assert(targetShapeMassMatrix.rows() == truncatedTargetEvecs.rows() && "Dimension should match");
             // (n2 x k2)^T @ ( (n2 x n2) @ (n2 x k1)  ) ---- > (k2 x k1)
             // C=Φ_target^T @ A2 @ Φ_source^(from p2 to p1)
+            //weighted least squares problem
             //updatedFunctionalMap.noalias() = targetEvecs.transpose() * (targetShapeArea * sourceEvecsUsingIndices); //(k2 x k1)
             const Eigen::VectorXd mass_vec = targetShapeMassMatrix.diagonal();
             const Eigen::MatrixXd weighted = (sourceEvecsUsingIndices.array().colwise() * mass_vec.array());
@@ -186,12 +190,17 @@ namespace ShapeAnalysis
         int percent = static_cast<int>(progress * 100 + 0.5f);
 
         // Clamp to valid range (just in case)
-        if (filled > width) filled = width;
-        if (percent > 100) percent = 100;
+        if(filled > width)
+            filled = width;
+
+        if(percent > 100)
+            percent = 100;
 
         std::cout << "\r[";   // carriage return to start of line
-        for (int i = 0; i < width; ++i)
+        for(int i = 0; i < width; ++i)
+        {
             std::cout << (i < filled ? '#' : ' ');
+        }
         std::cout << "] " << std::setw(3) << percent << '%' << std::flush;
     }
 

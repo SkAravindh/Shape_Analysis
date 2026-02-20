@@ -30,6 +30,12 @@ namespace ShapeAnalysis
     enum class MeshID {Mesh1, Mesh2};
 
     /**
+        * @brief Available algorithms for solving the linear system.
+        * This enum specifies which numerical method is used to compute the solution of the least-squares problem.
+     */
+    enum class SolverType { WeightedLeastSquaresSolver, QrSolver};
+
+    /**
      * @brief Container for preprocessing parameters used in spectral analysis.
      * This structure controls eigen-decomposition size, descriptor computation,  landmark handling, and debugging behavior.
      */
@@ -91,7 +97,7 @@ namespace ShapeAnalysis
     };
 
     /**
-     *  Parameters controlling functional map optimization
+     *  Parameters controlling functional map optimization.
      */
     struct OptimizationParameters
     {
@@ -188,9 +194,10 @@ namespace ShapeAnalysis
      * @param truncatedSourceEvecs Truncated eigenvectors of the source mesh (n_source × K1).
      * @param truncatedTargetEvecs Truncated eigenvectors of the target mesh (n_target × K2).
      * @param targetShapeMassMatrix Target mesh lumped mass matrix (n_target × n_target), typically containing Voronoi areas or per-vertex masses.
+     * @param solType choose either weighted least square method or QR decomposition.
      * @return  Functional map matrix C of size (K2 × K1) that maps coefficients from the source spectral basis to the target spectral basis.
      */
-    Eigen::MatrixXd pointwiseToFunctionalMap(const std::vector<size_t>& indices, const Eigen::MatrixXd& truncatedSourceEvecs, const Eigen::MatrixXd& truncatedTargetEvecs, const Eigen::SparseMatrix<double>& targetShapeMassMatrix);
+    Eigen::MatrixXd pointwiseToFunctionalMap(const std::vector<size_t>& indices, const Eigen::MatrixXd& truncatedSourceEvecs, const Eigen::MatrixXd& truncatedTargetEvecs, const Eigen::SparseMatrix<double>& targetShapeMassMatrix, SolverType solType);
 
     /**
      * @brief Performs nearest neighbor search using a KD-tree.

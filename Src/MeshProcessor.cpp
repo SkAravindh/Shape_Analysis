@@ -45,6 +45,11 @@ void MeshProcessor::computeFaceArea()
     geometry->unrequireFaceAreas();
 }
 
+const int& MeshProcessor::getEigenSpectrumSize() const
+{
+    return eigenSpectrumSize;
+}
+
 void MeshProcessor::laplacianSpectrum(const int no_of_ev, const bool intrinsic, const bool robust)
 {
     std::cout << "\n";
@@ -179,6 +184,7 @@ void MeshProcessor::process(const int no_of_ev, const bool skipNormals, const bo
      * robust ---> use tufted laplacian to compute weak laplacian as well as vertex lumped mass matrix.
      */
 
+    eigenSpectrumSize = no_of_ev;
     if(!skipNormals)
         computeFaceNormal();
 

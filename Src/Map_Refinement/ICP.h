@@ -1,5 +1,5 @@
 /**
-* @file Shape_Analysis/src/FunctionalMapping.h
+ * @file Shape_Analysis/src/Map_Refinement/ICP.h
  * @author Aravindhkumar Samathur Kalimuthu
  * @date   2026-Feb-10
  */
@@ -67,7 +67,7 @@ namespace ShapeAnalysis
          * @param truncatedTargetEvecs Target truncated eigenvectors.
          * @return Orthogonalized functional map after one iteration.
          */
-        Eigen::MatrixXd iterationICP(const Eigen::MatrixXd& FM, const Eigen::MatrixXd& truncatedSourceEvecs, const Eigen::MatrixXd& truncatedTargetEvecs) const;
+        Eigen::MatrixXd iterateICP(const Eigen::MatrixXd& FM, const Eigen::MatrixXd& truncatedSourceEvecs, const Eigen::MatrixXd& truncatedTargetEvecs) const;
     private:
         // Initial/working functional map.
         Eigen::MatrixXd fMap_;

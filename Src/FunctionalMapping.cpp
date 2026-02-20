@@ -5,6 +5,7 @@
 #include "FunctionalMapEnergyEvaluator.h"
 #include "FMoptimizer.h"
 #include "Map_Refinement/ICP.h"
+#include "Map_Refinement/ZoomOut.h"
 
 using namespace ShapeAnalysis;
 
@@ -443,7 +444,7 @@ std::pair<std::vector<size_t>, std::vector<double>> FunctionalMapping::computePo
 
 std::pair<std::vector<size_t>, std::vector<double>> FunctionalMapping::iterativeClosestPointRefinement()
 {
-    return iterativeClosestPointRefinement(50, 1e-10, false);
+    return iterativeClosestPointRefinement(75, 1e-10, false);
 }
 
 std::pair<std::vector<size_t>, std::vector<double>> FunctionalMapping::iterativeClosestPointRefinement(const int numIter, const double tolerance, const bool adjointMap)
@@ -457,6 +458,27 @@ std::pair<std::vector<size_t>, std::vector<double>> FunctionalMapping::iterative
     std::vector<size_t> indices;
     std::vector<double> distances;
     std::tie(indices, distances) = functionalMapToPointwise(FM_ICP, sourceMeshSptr, targetMeshSptr, false, true);
+    //std::cout << "\033[032m" << "Done !!" << "\033[0m" << std::endl;
+    return {indices, distances};
+}
+
+std::pair<std::vector<size_t>, std::vector<double> > FunctionalMapping::zoomOutRefinement()
+{
+    return zoomOutRefinement(25, 1);
+}
+
+std::pair<std::vector<size_t>, std::vector<double>> FunctionalMapping::zoomOutRefinement(const int numIter, const int stepSize)
+{
+    ZoomOutSptr zo_obj = ZoomOut::create(FM, sourceMeshSptr, targetMeshSptr, numIter, stepSize, false);
+    FM_ZoomOut = zo_obj->refineZoomOut();
+
+    std::cout << std::endl;
+    std::cout << "\033[32m" << "Initial functional map matrix size:\033[0m " << "(" << FM.rows() << " x " << FM.cols() << ")\n";
+    std::cout << "\033[32m" << "After " << "\033[0m"  << numIter << "\033[032m" << " zoom-out refinement iterations, size:\033[0m " << "(" << FM_ZoomOut.rows() << " x " << FM_ZoomOut.cols() << ")\n";
+
+    std::vector<size_t> indices;
+    std::vector<double> distances;
+    std::tie(indices, distances) = functionalMapToPointwise(FM_ZoomOut, sourceMeshSptr, targetMeshSptr, false, true);
     //std::cout << "\033[032m" << "Done !!" << "\033[0m" << std::endl;
     return {indices, distances};
 }

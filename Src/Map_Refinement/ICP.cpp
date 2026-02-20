@@ -35,7 +35,7 @@ Eigen::MatrixXd IterativeClosestPoint::refineICP() const
     for(int i=0; i<=iteration_range; ++i)
     {
         showProgress(i, iteration_range);
-        const Eigen::MatrixXd updated_C = iterationICP(temp_C, sourceEvec, targetEvec);
+        const Eigen::MatrixXd updated_C = iterateICP(temp_C, sourceEvec, targetEvec);
         const double max_co_eff = (updated_C - temp_C).cwiseAbs().maxCoeff();
         if(max_co_eff <= tolerance_)
         {
@@ -50,12 +50,12 @@ Eigen::MatrixXd IterativeClosestPoint::refineICP() const
     return temp_C;
 }
 
-Eigen::MatrixXd IterativeClosestPoint::iterationICP(const Eigen::MatrixXd& FM, const Eigen::MatrixXd& truncatedSourceEvecs, const Eigen::MatrixXd& truncatedTargetEvecs) const
+Eigen::MatrixXd IterativeClosestPoint::iterateICP(const Eigen::MatrixXd& FM, const Eigen::MatrixXd& truncatedSourceEvecs, const Eigen::MatrixXd& truncatedTargetEvecs) const
 {
     std::vector<size_t> indices;
     std::vector<double> distances;
     std::tie(indices, distances) = functionalMapToPointwise(FM, sourceMeshSptr_, targetMeshSptr_, adjointMap_);
-    Eigen::MatrixXd updated_C = pointwiseToFunctionalMap(indices, truncatedSourceEvecs, truncatedTargetEvecs, targetMeshSptr_->getMassMatrix());
+    Eigen::MatrixXd updated_C = pointwiseToFunctionalMap(indices, truncatedSourceEvecs, truncatedTargetEvecs, targetMeshSptr_->getMassMatrix(), SolverType::WeightedLeastSquaresSolver);
 
     /*
      * since FM is not orthogonal, we deliberately make it orthogonal using SVD we use U and V because they are responsible for orthogonality we ignore shear part.

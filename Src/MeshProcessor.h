@@ -150,6 +150,7 @@ namespace ShapeAnalysis
         * and the orientation operator.
          */
         void computeBarycentricBasis();
+        const int& getEigenSpectrumSize() const;
     private:
         /**
          * Constructs a MeshProcessor by loading a surface mesh from disk.
@@ -235,6 +236,9 @@ namespace ShapeAnalysis
         // Container that stores barycentric basis vectors per face.
         // Three basis vectors are stored for each face, so the size is (3 * number of faces).
         std::vector<Vector3> barycentric_basis;
+
+        // Total number of eigenvalues and eigenvectors computed.
+        int eigenSpectrumSize;
     };
 }
 

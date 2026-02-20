@@ -74,5 +74,10 @@ int main(int argc, char** argv)
     /*
      * Recover point-to-point correspondence (Mesh2 → Mesh1) by refining functional map using ICP.
      */
-    std::tie(indices, distances) = funMap->iterativeClosestPointRefinement();
+    //std::tie(indices, distances) = funMap->iterativeClosestPointRefinement();
+
+    /*
+    * Recover point-to-point correspondence (Mesh2 → Mesh1) by refining functional map using Zoom out.
+    */
+    std::tie(indices, distances) = funMap->zoomOutRefinement();
 }

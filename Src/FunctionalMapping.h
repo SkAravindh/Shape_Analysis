@@ -45,7 +45,7 @@ namespace ShapeAnalysis
          *  - Computes intrinsic descriptors (HKS or WKS).
          *  - Optionally augments descriptors using landmark-based features.
          *  - Subsamples and normalizes descriptors.
-         * @param params Preprocessing parameters
+         * @param params Preprocessing parameters.
          */
         void preprocess(const PreProcessParameters& params);
 
@@ -56,29 +56,35 @@ namespace ShapeAnalysis
          *  - Constructs descriptor multiplication operators.
          *  - Computes Laplacian commutativity terms.
          *  - Solves the functional map optimization problem.
-         * @param params Optimization and regularization parameters
+         * @param params Optimization and regularization parameters.
          */
         void fit(const FitParameters& params);
 
         /**
          * @brief Computes a point-to-point correspondence from the functional map.
          * The correspondence is obtained via nearest-neighbor search in the spectral embedding induced by the functional map.
-         * @return Returns, for each vertex in the target mesh, its corresponding vertex in the source shape and the associated spectral domain distance
+         * @return Returns, for each vertex in the target mesh, its corresponding vertex in the source shape and the associated spectral domain distance.
          */
         std::pair<std::vector<size_t>, std::vector<double>> computePointToPoint() const;
 
         /**
          * @brief Helper method that initiates actual ICP method which further performs the functional map refinement procedure.
-         * @return Returns, for each vertex in the target mesh, its corresponding vertex in the source shape and the associated spectral domain distance
+         * @return Returns, for each vertex in the target mesh, its corresponding vertex in the source shape and the associated spectral domain distance.
          */
         std::pair<std::vector<size_t>, std::vector<double>> iterativeClosestPointRefinement();
+
+        /**
+         * @brief Helper method that initiates actual Zoom Out method which further performs the functional map refinement procedure.
+         * @return Returns, for each vertex in the target mesh, its corresponding vertex in the source shape and the associated spectral domain distance.
+         */
+        std::pair<std::vector<size_t>, std::vector<double>> zoomOutRefinement();
 
     private:
         /**
          * @brief Constructor (use factory method instead).
          *
-         * @param sourceMesh Source mesh processor
-         * @param targetMesh Target mesh processor
+         * @param sourceMesh Source mesh processor.
+         * @param targetMesh Target mesh processor.
          */
         FunctionalMapping(const MeshProcessorSptr& sourceMesh, const MeshProcessorSptr& targetMesh);
     private:
@@ -95,15 +101,15 @@ namespace ShapeAnalysis
          * For each of the N descriptor features, computes the reduced orientation operator on source and target meshes, returning them as paired (source, target) matrices.
          * @param reversing Whether to reverse orientation.
          * @param normalize Whether to normalize the operator.
-         * @return Vector of N pairs of k×k matrices, where N = features, k = reduced basis size
-         * @example Example: 120 features with 35 eigenfunctions → returns 120 pairs of 35×35 matrices
+         * @return Vector of N pairs of k×k matrices, where N = features, k = reduced basis size.
+         * @example Example: 120 features with 35 eigenfunctions → returns 120 pairs of 35×35 matrices.
          */
          std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> computeOrientationOperator(bool reversing, bool normalize) const;
 
         /**
          * @brief Computes descriptor multiplication operators.
          * For each descriptor f, this computes the operator:  Φᵀ M (f ⊙ Φ) which encodes pointwise multiplication in the reduced spectral basis.
-         * @return std::vector of (source, target) descriptor operators
+         * @return std::vector of (source, target) descriptor operators.
          */
         std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> computeDescrOperator() const;
 
@@ -128,9 +134,17 @@ namespace ShapeAnalysis
          * @param numIter Maximum ICP iterations.
          * @param tolerance Convergence threshold.
          * @param adjointMap Use adjoint map flag.
-         * @return Returns, for each vertex in the target mesh, its corresponding vertex in the source shape and the associated spectral domain distance
+         * @return Returns, for each vertex in the target mesh, its corresponding vertex in the source shape and the associated spectral domain distance.
          */
         std::pair<std::vector<size_t>, std::vector<double>> iterativeClosestPointRefinement(int numIter, double tolerance, bool adjointMap);
+
+        /**
+         * @brief A method that creates instance of Zoom Out class and initiates the map refinement process.
+         * @param numIter Maximum Zoom Out iteration.
+         * @param stepSize Spectral increment.
+         * @return Returns, for each vertex in the target mesh, its corresponding vertex in the source shape and the associated spectral domain distance.
+         */
+        std::pair<std::vector<size_t>, std::vector<double>> zoomOutRefinement(int numIter, int stepSize);
 
     private:
         // Non-owning shared references to input meshes
@@ -155,6 +169,9 @@ namespace ShapeAnalysis
 
         // Refined Functional map matrix C using ICP
         Eigen::MatrixXd FM_ICP;
+
+        // Refined Functional map matrix C using ICP
+        Eigen::MatrixXd FM_ZoomOut;
     };
 
 }
