@@ -33,6 +33,22 @@ const Eigen::MatrixXd& FunctionalMapEnergy::getMatrixC() const
     return C_;
 }
 
+std::pair<double, Eigen::MatrixXd> FunctionalMapEnergy::orthogonalEnergyTerm(const Eigen::MatrixXd& C) const
+{
+    //******************************************************************************************************************
+    // Compute orthogonality preservation constrain.
+    // || CC^T -I || ^2
+    //******************************************************************************************************************
+    // Matrix C is a square matrix
+    Eigen::MatrixXd identity = Eigen::MatrixXd::Identity(C.rows(), C.rows());
+    Eigen::MatrixXd Ct = C.transpose();
+    const double energy = ( C * Ct - identity).array().square().sum();
+
+    Eigen::MatrixXd grad(C.rows(), C.cols());
+    grad.noalias() =  4 * (C * Ct - identity) * C;
+    return {energy, grad};
+}
+
 double FunctionalMapEnergy::operator()(const Eigen::VectorXd& x, Eigen::VectorXd& grad) const
 {
     ++functional_calls;
@@ -89,6 +105,19 @@ double FunctionalMapEnergy::operator()(const Eigen::VectorXd& x, Eigen::VectorXd
         }
     }
 
+    //******************************************************************************************************************
+    // Compute orthogonality preservation constrain.
+    // || CC^T -I || ^2
+    //******************************************************************************************************************
+/*
+    {
+        double computed_energy;
+        Eigen::MatrixXd computed_grad;
+        std::tie(computed_energy, computed_grad) = orthogonalEnergyTerm(C);
+        energy += computed_energy;
+        gradC.noalias() += computed_grad;
+    }
+*/
     // write graadient back to vector
     Eigen::Map<Eigen::MatrixXd>(grad.data(), K, K) = gradC;
     return energy;

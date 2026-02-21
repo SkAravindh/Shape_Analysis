@@ -82,6 +82,25 @@ namespace  ShapeAnalysis
          * class constructor
          */
         FunctionalMapEnergy(const OptimizationParameters& params);
+
+        /**
+         * @brief Orthogonality preservation constraint.
+         *
+         * For isometric source and target shapes, the optimal functional map C should be orthogonal (i.e. C Cᵀ = I). This term penalizes deviations
+         * from orthogonality using the Frobenius norm:
+         *          - E(C) = || C Cᵀ − I ||²_F
+         * The function returns both the energy and its gradient:
+         *          -  ∇E(C) = 4 (C Cᵀ − I) C
+         * This regularizer encourages C to remain close to an orthogonal matrix.
+         *
+         * @warning
+         *  - This term should be used with care during optimization. Enforcing strict
+         *  - orthogonality can degrade correspondences when the shapes are not close to isometric.
+         *  - In practice, orthogonality is typically imposed only during map refinement rather than during the main optimization.
+         * @param C Square functional map matrix.
+         * @return Pair (energy, gradient).
+         */
+        std::pair<double, Eigen::MatrixXd> orthogonalEnergyTerm(const Eigen::MatrixXd& C) const;
     private:
         double wDescr_;
         double wLap_;
