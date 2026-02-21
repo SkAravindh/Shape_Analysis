@@ -105,6 +105,7 @@ namespace ShapeAnalysis
         double wLap;
         double wDescrComm;
         double wOrient;
+        bool orthogonalEnergy = false;
         Eigen::MatrixXd descr1Reduced;
         Eigen::MatrixXd descr2Reduced;
         std::vector<std::pair<Eigen::MatrixXd, Eigen::MatrixXd>> descrOperatorPairs;

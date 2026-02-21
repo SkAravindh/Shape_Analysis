@@ -228,6 +228,7 @@ void FunctionalMapping::fit(const FitParameters& params)
     optimParams.descrOperatorPairs = descriptorOperatorPairs;
     optimParams.eigenvalueSqDiff = ev_sqdiff;
     optimParams.orienOperatorPairs = orientationOperatorPairs;
+    optimParams.orthogonalEnergy = false;
 
     // rescale orientation term
     if(params.w_orient)

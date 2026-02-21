@@ -9,6 +9,7 @@ FunctionalMapEnergy::FunctionalMapEnergy(const OptimizationParameters& params)
     wLap_(params.wLap),
     wDescrComm_(params.wDescrComm),
     wOrient_(params.wOrient),
+    orthogonalEnergy_(params.orthogonalEnergy),
     descr1_(params.descr1Reduced),
     descr2_(params.descr2Reduced),
     descrOperatorPairs_(params.descrOperatorPairs),
@@ -109,15 +110,17 @@ double FunctionalMapEnergy::operator()(const Eigen::VectorXd& x, Eigen::VectorXd
     // Compute orthogonality preservation constrain.
     // || CC^T -I || ^2
     //******************************************************************************************************************
-/*
+
     {
-        double computed_energy;
-        Eigen::MatrixXd computed_grad;
-        std::tie(computed_energy, computed_grad) = orthogonalEnergyTerm(C);
-        energy += computed_energy;
-        gradC.noalias() += computed_grad;
+        if(orthogonalEnergy_)
+        {
+            double computed_energy;
+            Eigen::MatrixXd computed_grad;
+            std::tie(computed_energy, computed_grad) = orthogonalEnergyTerm(C);
+            energy += computed_energy;
+            gradC.noalias() += computed_grad;
+        }
     }
-*/
     // write graadient back to vector
     Eigen::Map<Eigen::MatrixXd>(grad.data(), K, K) = gradC;
     return energy;

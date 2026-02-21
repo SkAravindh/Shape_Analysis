@@ -106,6 +106,7 @@ namespace  ShapeAnalysis
         double wLap_;
         double wDescrComm_;
         double wOrient_;
+        bool orthogonalEnergy_ = false;
 
         Eigen::MatrixXd descr1_;
         Eigen::MatrixXd descr2_;
